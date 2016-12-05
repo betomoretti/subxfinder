@@ -2,13 +2,13 @@ const subxfinder = require('./subxfinder')
 const fs = require('fs')
 const request = require('request')
 
-subxfinder.search('seinfeld', 5, (err, results) => {
+subxfinder.search('seinfeld', (err, results) => {
   if (err) {
     console.log(err)
   } else if (results) {
     getFile(results, 0)
   };
-})
+}, 5)
 
 const getFile = (results, i) => {
   try {

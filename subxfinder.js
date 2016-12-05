@@ -9,7 +9,7 @@ class SubxFinder {
     }
   }
 
-  search (title, limit, callback) {
+  search (title, callback, limit) {
     const toSearch = this.prepareParameter(title)
 
     xray.timeout(this.configs.timeout)
@@ -50,7 +50,7 @@ class SubxFinder {
     }
   }
 
-  searchAndFilter (title, descriptionFilter, strict, callback) {
+  searchAndFilter (title, descriptionFilter, strict, callback, limit) {
     const descFilters = (strict) ? [descriptionFilter] : descriptionFilter.split(' ')
 
     try {
@@ -76,7 +76,7 @@ class SubxFinder {
 
           callback(...[null, subsFound])
         }
-      })
+      }, limit)
     } catch (error) {
       callback(...[error, null])
     }
