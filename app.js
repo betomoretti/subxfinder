@@ -2,7 +2,7 @@ const subxfinder = require('./subxfinder')
 const fs = require('fs')
 const request = require('request')
 
-subxfinder.search('seinfeld', (err, results) => {
+subxfinder.search('seinfeld', 5, (err, results) => {
   if (err) {
     console.log(err)
   } else if (results) {

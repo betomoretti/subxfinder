@@ -9,7 +9,7 @@ class SubxFinder {
     }
   }
 
-  search (title, callback) {
+  search (title, limit, callback) {
     const toSearch = this.prepareParameter(title)
 
     xray.timeout(this.configs.timeout)
@@ -33,8 +33,9 @@ class SubxFinder {
 
         let totalPages = 1
 
-        if (data.pages.length != 0) {
-          totalPages = (data.pages[data.pages.length - 1] != 'Siguiente »') ? data.pages[data.pages.length - 1] : data.pages[data.pages.length - 2]
+        if (data.pages.length !== 0) {
+          totalPages = (data.pages[data.pages.length - 1] !== 'Siguiente »') ? data.pages[data.pages.length - 1] : data.pages[data.pages.length - 2]
+          totalPages = limit && limit < totalPages ? limit : totalPages
         }
 
         const subtitles = _.merge(_.merge(data.subs.title, data.subs.description), data.subs.link)
@@ -109,10 +110,11 @@ const searchRecursive = (configs, toSearch, subtitles, totalPages, i, callback) 
       link: xray('#buscador_detalle_sub_datos', [{link: 'a:last-child@href'}])
     }
   })((err, data) => {
+    if (err) console.log(err)
     subtitles = subtitles.concat(_.merge(_.merge(data.subs.title, data.subs.description), data.subs.link))
     i = i + 1
 
-    if (i == totalPages) {
+    if (i === totalPages) {
       callback(...[null, subtitles])
     } else {
       searchRecursive(configs, toSearch, subtitles, totalPages, i, callback)
