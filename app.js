@@ -8,7 +8,7 @@ subxfinder.search('seinfeld', (err, results) => {
   } else if (results) {
     getFile(results, 0)
   };
-})
+}, 5)
 
 const getFile = (results, i) => {
   try {
