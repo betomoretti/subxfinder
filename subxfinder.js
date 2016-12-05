@@ -1,88 +1,94 @@
-var xray = require('x-ray')(),
-	_ = require('lodash');
+const xray = require('x-ray')()
+const _ = require('lodash')
 
-var subxfinder = function(){
-	this.configs = {
-		rootUrl: 'http://www.subdivx.com/index.php?accion=5&buscar=',
-		timeout: 20000
-	};
+class SubxFinder {
+  constructor () {
+    this.configs = {
+      rootUrl: 'http://www.subdivx.com/index.php?accion=5&buscar=',
+      timeout: 20000
+    }
+  }
 
-	return this;
-};
+  search (title, callback) {
+    const toSearch = this.prepareParameter(title)
 
-subxfinder.prototype.search = function(title, callback){
-	var _this = this,
-		toSearch = this.prepareParameter(title);
+    xray.timeout(this.configs.timeout)
 
-	xray.timeout(_this.configs.timeout);
+    try {
+      if (title.length <= 3) throw new Error('The search title must have at least 3 letters')
 
-	try{
-		if (title.length <= 3) throw new Error('The search title must have at least 3 letters');
+      console.log('Searching subtitles for: %s', title)
 
-		console.log('Searching subtitles for: %s', title);
+      xray(this.configs.rootUrl + toSearch, '#contenedor_interno #contenedor_izq', {
+        result: 'span.result_busc',
+        pages: xray('.pagination a', ['']),
+        subs: {
+          title: xray('#menu_detalle_buscador a', [{title: ''}]),
+          description: xray('#buscador_detalle_sub', [{description: ''}]),
+          link: xray('#buscador_detalle_sub_datos', [{link: 'a:last-child@href'}])
+        }
+      })((err, data) => {
+        if (!data.result) throw new Error('No results available')
+        if (err) throw new Error(err)
 
-		xray(_this.configs.rootUrl + toSearch, '#contenedor_interno #contenedor_izq', {
-			result: 'span.result_busc',
-			pages: xray('.pagination a', ['']),
-			subs: {
-				title: xray('#menu_detalle_buscador a', [{title: ''}]),
-				description: xray('#buscador_detalle_sub', [{description: ''}]),
-				link: xray('#buscador_detalle_sub_datos', [{link: 'a:last-child@href'}])
-			}
-		})(function(err, data){
-			if (!data.result) throw new Error('No results available');
-			if (err) throw new Error(err);
+        let totalPages = 1
 
-			var totalPages = 1;
+        if (data.pages.length != 0) {
+          totalPages = (data.pages[data.pages.length - 1] != 'Siguiente »') ? data.pages[data.pages.length - 1] : data.pages[data.pages.length - 2]
+        }
 
-			if(data.pages.length != 0){
-				totalPages = (data.pages[data.pages.length - 1] != 'Siguiente »') ? data.pages[data.pages.length - 1] : data.pages[data.pages.length - 2];
-			}
+        const subtitles = _.merge(_.merge(data.subs.title, data.subs.description), data.subs.link)
 
-			var subtitles = _.merge(_.merge(data.subs.title, data.subs.description), data.subs.link);
+        if (totalPages > 1) {
+          const i = 2
+          searchRecursive(this.configs, toSearch, subtitles, totalPages, i, callback)
+        }
+      })
+    } catch (error) {
+      callback(...[error, null])
+    }
+  }
 
-			if(totalPages > 1){
-				var i = 2;
-				searchRecursive(_this.configs, toSearch, subtitles, totalPages, i, callback);
-			}
-		});
-	}catch(error){
-		callback.apply(null, [error, null]);
-	}
-};
+  searchAndFilter (title, descriptionFilter, strict, callback) {
+    const descFilters = (strict) ? [descriptionFilter] : descriptionFilter.split(' ')
 
-subxfinder.prototype.searchAndFilter = function(title, description_filter, strict, callback){
-	var _this = this,
-		descFilters = (strict) ? [description_filter] : description_filter.split(" ");
+    try {
+      this.search(title, (err, subtitles) => {
+        if (err) {
+          throw new Error(err)
+        } else {
+                    // Filter by description
+          const subsFound = _.filter(subtitles, sub => {
+            let found = false
 
-	try{
-		_this.search(title, function(err, subtitles){
-			if(err){
-				throw new Error(err);
-			}else{
-				//Filter by description
-				var subsFound = _.filter(subtitles, function(sub){
-					var found = false;
+            if (sub.description) {
+              _(descFilters).forEach(str => {
+                if (sub.description.toLowerCase().includes(str.toLowerCase())) {
+                  found = true
+                  return
+                }
+              }).value()
+            }
 
-					if(sub.description){
-						_(descFilters).forEach(function(str){
-							if( sub.description.toLowerCase().indexOf(str.toLowerCase()) !== -1 ){
-								found = true;
-								return;
-							}
-						}).value();
-					}
+            return found
+          })
 
-					return found;
-				});
+          callback(...[null, subsFound])
+        }
+      })
+    } catch (error) {
+      callback(...[error, null])
+    }
+  }
 
-				callback.apply(null, [null, subsFound]);
-			}
-		});
-	}catch(error){
-		callback.apply(null, [error, null]);
-	}
-};
+  setConfigs (configs) {
+    this.configs = _.merge(this.configs, configs)
+  }
+
+  prepareParameter (param) {
+    return encodeURIComponent(param)
+  }
+}
 
 /**
  * Search on page recursive
@@ -93,33 +99,25 @@ subxfinder.prototype.searchAndFilter = function(title, description_filter, stric
  * @param i
  * @param callback
  */
-function searchRecursive(configs, toSearch, subtitles, totalPages, i, callback){
-	console.log('Querying page: %s', i);
+const searchRecursive = (configs, toSearch, subtitles, totalPages, i, callback) => {
+  console.log('Querying page: %s', i)
 
-	xray(configs.rootUrl + toSearch + '&pg=' + i, '#contenedor_interno #contenedor_izq', {
-		subs: {
-			title: xray('#menu_detalle_buscador a', [{title: ''}]),
-			description: xray('#buscador_detalle_sub', [{description: ''}]),
-			link: xray('#buscador_detalle_sub_datos', [{link: 'a:last-child@href'}])
-		}
-	})(function(err, data){
-		subtitles = subtitles.concat(_.merge(_.merge(data.subs.title, data.subs.description), data.subs.link));
-		i = i + 1;
+  xray(`${configs.rootUrl + toSearch}&pg=${i}`, '#contenedor_interno #contenedor_izq', {
+    subs: {
+      title: xray('#menu_detalle_buscador a', [{title: ''}]),
+      description: xray('#buscador_detalle_sub', [{description: ''}]),
+      link: xray('#buscador_detalle_sub_datos', [{link: 'a:last-child@href'}])
+    }
+  })((err, data) => {
+    subtitles = subtitles.concat(_.merge(_.merge(data.subs.title, data.subs.description), data.subs.link))
+    i = i + 1
 
-		if(i == totalPages){
-			callback.apply(null, [null, subtitles]);
-		}else{
-			searchRecursive(configs, toSearch, subtitles, totalPages, i, callback);
-		}
-	});
+    if (i == totalPages) {
+      callback(...[null, subtitles])
+    } else {
+      searchRecursive(configs, toSearch, subtitles, totalPages, i, callback)
+    }
+  })
 }
 
-subxfinder.prototype.setConfigs = function(configs){
-	this.configs = _.merge(this.configs, configs);
-};
-
-subxfinder.prototype.prepareParameter = function(param){
-	return encodeURIComponent(param)
-};
-
-module.exports = new subxfinder();
+module.exports = new SubxFinder()
