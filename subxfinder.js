@@ -1,5 +1,9 @@
 const xray = require('x-ray')()
 const _ = require('lodash')
+const fs = require('fs')
+const request = require('request')
+const unzip = require('unzip2')
+const REG = /(.srt)$/ig
 
 class SubxFinder {
   constructor () {
@@ -48,6 +52,17 @@ class SubxFinder {
     } catch (error) {
       callback(...[error, null])
     }
+  }
+
+  searchAndDownload (term, limit, destPath) {
+    const dest = destPath
+    this.search(term, function (err, results) {
+      if (err) {
+        console.log(err)
+      } else if (results) {
+        getFile(results, 0, dest)
+      };
+    }, limit)
   }
 
   searchAndFilter (title, descriptionFilter, strict, callback, limit) {
@@ -120,6 +135,54 @@ const searchRecursive = (configs, toSearch, subtitles, totalPages, i, callback) 
       searchRecursive(configs, toSearch, subtitles, totalPages, i, callback)
     }
   })
+}
+
+/**
+ * Search on page recursive
+ * @param subtitles
+ * @param index
+ * @param destPath
+ */
+const getFile = (subtitles, i, destPath) => {
+  try {
+    const sub = subtitles[i]
+
+    if (i < subtitles.length) {
+      const mime = require('mime-types')
+
+      request
+        .get(sub.link)
+        .on('response', function (response) {
+          const responseType = (response.headers['content-type'] || '').split(';')[0].trim()
+          const ext = mime.extension(responseType)
+
+          let filename = sub.title
+
+          if (fs.existsSync(`${__dirname}/${filename}.${ext}`)) {
+            filename = `${filename} - ${i}`
+          }
+
+          filename += `.${ext}`
+
+          this
+            .pipe(unzip.Parse())
+            .on('entry', function (entry) {
+              const fileName = entry.path
+              if (REG.test(fileName)) {
+                entry.pipe(fs.createWriteStream(`${destPath}${fileName}`))
+              } else {
+                entry.autodrain()
+              }
+            })
+            .on('error', console.log)
+
+          i = i + 1
+          getFile(subtitles, i)
+        })
+    }
+  } catch (e) {
+    console.log(e)
+  }
 }
 
 module.exports = new SubxFinder()
